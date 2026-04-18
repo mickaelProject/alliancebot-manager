@@ -37,15 +37,7 @@ async function handleRsvpButton(interaction) {
   let guildName = 'Discord';
   if (interaction.guild) guildName = interaction.guild.name;
   const settings = await getGuildSettings(ev.guild_id);
-  const { displayName, iconUrl: resolvedHttps } = resolveReminderBranding(settings, guildName);
-  const prev = interaction.message.embeds[0];
-  const existingAuthorIcon =
-    prev && typeof prev.author?.iconURL === 'function' ? prev.author.iconURL() : null;
-  const httpsResolved = resolvedHttps && /^https:\/\//i.test(resolvedHttps) ? resolvedHttps : null;
-  const httpsExisting =
-    existingAuthorIcon && /^https:\/\//i.test(existingAuthorIcon) ? existingAuthorIcon : null;
-  /** Edits cannot attach new files — reuse CDN author icon from the message, or configured https only. */
-  const iconUrl = httpsResolved || httpsExisting || null;
+  const { displayName } = resolveReminderBranding(settings, guildName);
   const eventTpl = String(ev.reminder_body_template ?? '').trim();
   const guildTpl = String(settings.reminder_body_template ?? '').trim();
   const usedCustom = Boolean(eventTpl || guildTpl);
@@ -58,7 +50,7 @@ async function handleRsvpButton(interaction) {
   const embed = buildReminderEmbed({
     title: ev.title,
     displayName,
-    iconUrl,
+    iconUrl: null,
     themeColor: settings.theme_color,
     offsetMinutes,
     description,

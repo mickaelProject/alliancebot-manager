@@ -1,6 +1,6 @@
 /**
  * Cron-based reminder scheduler (every minute).
- * Sends reminder embed (guild name + logo on author) + @everyone (no RSVP row).
+ * Sends reminder embed (nom de guilde en auteur, sans logo) + @everyone (sans boutons).
  */
 
 const cron = require('node-cron');
@@ -10,7 +10,6 @@ const { buildReminderEmbed } = require('../lib/eventEmbeds');
 const { formatReminderBodyFromTemplate } = require('../lib/reminderBodyTemplate');
 const { finalizeDiscordReminderBody } = require('../lib/reminderBodyDiscordTranslate');
 const { resolveReminderBranding } = require('../lib/reminderBranding');
-const { filesAndAuthorIconUrl } = require('../lib/brandingAttachment');
 const { createLogger } = require('../lib/logger');
 const appEvents = require('../lib/appEvents');
 
@@ -43,8 +42,7 @@ async function sendReminder(client, event, offsetMinutes) {
       if (g) guildName = g.name;
     }
     const settings = await getGuildSettings(event.guild_id);
-    const { displayName, iconUrl: resolvedHttps } = resolveReminderBranding(settings, guildName);
-    const { files, iconUrl } = filesAndAuthorIconUrl(resolvedHttps);
+    const { displayName } = resolveReminderBranding(settings, guildName);
     const eventTpl = String(event.reminder_body_template ?? '').trim();
     const guildTpl = String(settings.reminder_body_template ?? '').trim();
     const usedCustom = Boolean(eventTpl || guildTpl);
@@ -57,7 +55,7 @@ async function sendReminder(client, event, offsetMinutes) {
     const embed = buildReminderEmbed({
       title: event.title,
       displayName,
-      iconUrl,
+      iconUrl: null,
       themeColor: settings.theme_color,
       offsetMinutes,
       description,
@@ -65,7 +63,6 @@ async function sendReminder(client, event, offsetMinutes) {
     const msg = await channel.send({
       content: '@everyone',
       allowedMentions: { parse: ['everyone'] },
-      files,
       embeds: [embed],
     });
     await setReminderMessageRef(event.id, offsetMinutes, msg.channel.id, msg.id);

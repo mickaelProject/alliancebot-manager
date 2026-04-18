@@ -24,7 +24,6 @@ const { buildReminderEmbed } = require('../lib/eventEmbeds');
 const { formatReminderBodyFromTemplate } = require('../lib/reminderBodyTemplate');
 const { finalizeDiscordReminderBody } = require('../lib/reminderBodyDiscordTranslate');
 const { resolveReminderBranding } = require('../lib/reminderBranding');
-const { publicLogoHttpsOrNull } = require('../lib/brandingAttachment');
 const { resolvePlannerEditorProfiles } = require('../lib/plannerEditorProfiles');
 const { config } = require('../config');
 const { ensureCsrfToken } = require('./sessionToken');
@@ -249,15 +248,14 @@ router.get('/admin/event-reminder-preview', async (req, res) => {
     }
 
     const guildLabel = settings.name || 'Guild';
-    const { displayName, iconUrl: resolvedHttps } = resolveReminderBranding(settings, guildLabel);
-    const previewIcon = publicLogoHttpsOrNull(resolvedHttps);
+    const { displayName } = resolveReminderBranding(settings, guildLabel);
     const usedCustom = Boolean(String(bodyTemplate || '').trim());
     const rawDescription = formatReminderBodyFromTemplate(bodyTemplate, title, offsetMinutes);
     const description = await finalizeDiscordReminderBody(rawDescription, usedCustom);
     const embed = buildReminderEmbed({
       title,
       displayName,
-      iconUrl: previewIcon,
+      iconUrl: null,
       themeColor: Number(settings.theme_color) || 0x5865f2,
       offsetMinutes,
       description,

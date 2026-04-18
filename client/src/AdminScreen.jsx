@@ -12,16 +12,11 @@ function legacyReminderTextFromEmbed(embed) {
   return parts.join('\n\n');
 }
 
-/** Aperçu embed Discord (auteur + logo + texte) + boutons RSVP. */
+/** Aperçu embed Discord (auteur + texte, sans logo si l’embed n’a pas d’icône). */
 function ReminderMessagePreview({ reminderText, embed, buttonLabels }) {
   const { t } = useI18n();
   const author = embed && typeof embed === 'object' ? embed.author : null;
-  const iconUrl =
-    author && author.icon_url
-      ? String(author.icon_url)
-      : author && author.name
-        ? '/branding/firelegends-logo.png'
-        : '';
+  const iconUrl = author && author.icon_url ? String(author.icon_url) : '';
   const bodyText =
     (reminderText && String(reminderText)) ||
     (embed && typeof embed.description === 'string' ? embed.description : '') ||
