@@ -11,6 +11,25 @@ const log = createLogger('auth');
 
 const DISCORD_API = 'https://discord.com/api/v10';
 
+/** Voir https://discord.com/developers/docs/reference#user-agent — requis pour éviter blocages Cloudflare sur les appels serveur. */
+function getDiscordUserAgent() {
+  const fromPublic = String(config.publicAppUrl || '')
+    .trim()
+    .replace(/\/$/, '');
+  let fromCallback = '';
+  try {
+    if (config.oauthCallbackUrl) fromCallback = new URL(config.oauthCallbackUrl).origin;
+  } catch {
+    /* ignore */
+  }
+  const url = fromPublic || fromCallback || 'https://github.com/mickaelProject/alliancebot-manager';
+  return `AllianceBotManager/3.0 (+${url})`;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /**
  * @param {import('express').Request} req
  */
@@ -48,23 +67,42 @@ async function exchangeCode(code) {
     code,
     redirect_uri: config.oauthCallbackUrl,
   });
-  const res = await fetch(`${DISCORD_API}/oauth2/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: params.toString(),
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    log.error('oauth_token_exchange_failed', { status: res.status, body: text.slice(0, 800) });
-    let discordErr = '';
-    try {
-      discordErr = String(JSON.parse(text).error || '');
-    } catch {
-      /* ignore */
+  const bodyStr = params.toString();
+  const headers = {
+    'Content-Type': 'application/x-www-form-urlencoded',
+    Accept: 'application/json',
+    'User-Agent': getDiscordUserAgent(),
+  };
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const res = await fetch(`${DISCORD_API}/oauth2/token`, {
+      method: 'POST',
+      headers,
+      body: bodyStr,
+    });
+    if (res.status === 429 && attempt < maxAttempts) {
+      await res.text().catch(() => '');
+      const ra = res.headers.get('retry-after');
+      const parsed = parseInt(String(ra || ''), 10);
+      const waitSec = Number.isFinite(parsed) && parsed > 0 ? Math.min(60, parsed) : Math.min(30, attempt * 3);
+      log.warn('oauth_token_exchange_rate_limited', { attempt, waitSec, retryAfter: ra });
+      await sleep(waitSec * 1000);
+      continue;
     }
-    throw new Error(`Token exchange failed: ${res.status} ${discordErr || text.slice(0, 200)}`);
+    if (!res.ok) {
+      const text = await res.text();
+      log.error('oauth_token_exchange_failed', { status: res.status, body: text.slice(0, 800) });
+      let discordErr = '';
+      try {
+        discordErr = String(JSON.parse(text).error || '');
+      } catch {
+        /* ignore */
+      }
+      throw new Error(`Token exchange failed: ${res.status} ${discordErr || text.slice(0, 200)}`);
+    }
+    return res.json();
   }
-  return res.json();
+  throw new Error('Token exchange failed after retries');
 }
 
 /**
@@ -72,7 +110,11 @@ async function exchangeCode(code) {
  */
 async function fetchDiscordUser(accessToken) {
   const res = await fetch(`${DISCORD_API}/users/@me`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/json',
+      'User-Agent': getDiscordUserAgent(),
+    },
   });
   if (!res.ok) {
     const text = await res.text();
@@ -100,7 +142,11 @@ function extractGuildSnowflakesFromJsonText(text) {
 
 async function fetchUserGuilds(accessToken) {
   const res = await fetch(`${DISCORD_API}/users/@me/guilds`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/json',
+      'User-Agent': getDiscordUserAgent(),
+    },
   });
   const text = await res.text();
   if (!res.ok) {
@@ -124,7 +170,11 @@ async function fetchGuildMember(userId) {
   const guildId = config.dashboardGuildId;
   if (!guildId) return null;
   const res = await fetch(`${DISCORD_API}/guilds/${guildId}/members/${userId}`, {
-    headers: { Authorization: `Bot ${config.discordToken}` },
+    headers: {
+      Authorization: `Bot ${config.discordToken}`,
+      Accept: 'application/json',
+      'User-Agent': getDiscordUserAgent(),
+    },
   });
   if (res.status === 404) return null;
   if (!res.ok) {
@@ -227,6 +277,9 @@ function mountDiscordOAuth(app) {
       } else if (msg.includes('invalid_grant')) {
         fr +=
           '<p>Souvent : <code>OAUTH_CALLBACK_URL</code> ne correspond pas exactement à une redirection enregistrée (même https, même chemin, sans espace en trop), ou vous avez <strong>rafraîchi</strong> la page du callback (le <code>code</code> ne fonctionne qu’une fois). Recommencez depuis <a href="/login">/login</a>.</p>';
+      } else if (msg.includes('429')) {
+        fr +=
+          '<p>Discord a répondu <strong>429</strong> (limitation / protection Cloudflare). Ce n’est en général <strong>pas</strong> une erreur de secret OAuth : réessayez dans quelques minutes. Le serveur envoie désormais un <code>User-Agent</code> conforme et réessaie automatiquement en cas de 429.</p>';
       } else if (msg.includes('Token exchange failed')) {
         fr +=
           '<p>Discord a refusé l’échange du code. Vérifiez <code>OAUTH_CALLBACK_URL</code> (identique au portail) et les identifiants OAuth2. Consultez les logs Render pour la ligne <code>oauth_token_exchange_failed</code>.</p>';
