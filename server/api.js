@@ -227,7 +227,9 @@ router.get('/admin/event-reminder-preview', async (req, res) => {
   if (!(await requirePlannerAdminSession(req, res))) return;
   try {
     const settings = await getGuildSettings(req.guildId);
-    const offsetMinutes = config.reminderMinutes[0] ?? 5;
+    /** Aperçu : délai le plus proche du début (min), cohérent avec le texte « starts in N minutes ». */
+    const offsetMinutes =
+      config.reminderMinutes.length > 0 ? Math.min(...config.reminderMinutes) : 5;
 
     let title = 'Sample: TRI-ALLIANCE CLASH — LEGION 1';
     let bodyTemplate = '';

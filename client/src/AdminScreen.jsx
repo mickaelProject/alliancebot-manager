@@ -12,14 +12,9 @@ function legacyReminderTextFromEmbed(embed) {
   return parts.join('\n\n');
 }
 
-/** Aperçu embed Discord (auteur + logo + texte anglais) + boutons RSVP. */
-function ReminderMessagePreview({ reminderText, embed, offsetMinutes, reminderMinutes, buttonLabels }) {
+/** Aperçu embed Discord (auteur + logo + texte) + boutons RSVP. */
+function ReminderMessagePreview({ reminderText, embed, buttonLabels }) {
   const { t } = useI18n();
-  const offsets =
-    Array.isArray(reminderMinutes) && reminderMinutes.length
-      ? reminderMinutes.join(', ')
-      : String(offsetMinutes ?? 5);
-
   const author = embed && typeof embed === 'object' ? embed.author : null;
   const iconUrl =
     author && author.icon_url
@@ -69,9 +64,6 @@ function ReminderMessagePreview({ reminderText, embed, offsetMinutes, reminderMi
           ))}
         </div>
       ) : null}
-      <p className="border-t border-[#1e1f22] bg-[#232428] px-3 py-2 text-[10px] leading-relaxed text-[#6d7280]">
-        {t('admin.previewMessageFoot', { offsets })}
-      </p>
     </div>
   );
 }
@@ -532,8 +524,6 @@ export function AdminScreen() {
                       <ReminderMessagePreview
                         reminderText={reminderPreview.reminderText}
                         embed={reminderPreview.embed}
-                        offsetMinutes={reminderPreview.offsetMinutes}
-                        reminderMinutes={reminderPreview.reminderMinutes}
                         buttonLabels={reminderPreview.buttonLabels}
                       />
                     </div>

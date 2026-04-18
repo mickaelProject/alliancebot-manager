@@ -31,9 +31,9 @@ export const STRINGS = {
     'planner.editPast': 'Cet événement est déjà passé et ne peut plus être modifié.',
     'planner.reminderBodyLabel': 'Texte du rappel Discord (optionnel)',
     'planner.reminderBodyPlaceholder':
-      'Exemple :\nReminder — starts in {minutes} {minute_word}\n\n{title}',
+      'Exemple : un court message pour annoncer le rappel, sur une ou plusieurs lignes.',
     'planner.reminderBodyHelp':
-      'Laissez vide pour le texte par défaut (anglais). Sinon, modèle du corps de l’embed (max 4096 caractères). Variables : {title} ou {event}, {offset} ou {minutes}, {minute_word}. Saut de ligne : retour normal ou \\n. Si vous rédigez en français, le serveur peut le traduire en anglais à l’envoi sur Discord (configurez DEEPL_AUTH_KEY sur le serveur — voir .env.example).',
+      'Laissez vide pour garder le message automatique sur Discord (en anglais). Si vous écrivez ici, ce sera le texte du rappel pour cet événement. Vous pouvez utiliser plusieurs lignes. Un texte en français peut être traduit en anglais à l’envoi si votre installation le permet.',
     'planner.errorGuildForbidden': 'Guilde planning non autorisée',
     'planner.errorSession': 'Session expirée ou non authentifié',
     'planner.errorLoadEvents': 'Impossible de charger les événements',
@@ -60,7 +60,7 @@ export const STRINGS = {
     'admin.backPlanner': 'Retour au planning',
     'admin.loading': 'Chargement…',
     'admin.intro':
-      'Ajoutez les identifiants Discord (snowflake) des membres autorisés à créer et supprimer des événements. Tant qu’aucun membre n’est listé, tout utilisateur connecté au planning peut le faire. Les administrateurs (configuration serveur) le peuvent toujours. Le texte du rappel Discord se configure par événement dans le planning (nouvel événement ou clic sur un bloc à venir).',
+      'Ajoutez les identifiants numériques Discord des membres autorisés à créer et supprimer des événements. Tant qu’aucun membre n’est listé, tout utilisateur connecté au planning peut le faire. Les administrateurs le peuvent toujours. Le texte du rappel Discord se configure par événement dans le planning (nouvel événement ou clic sur un bloc à venir).',
     'admin.forbidden': 'Vous n’avez pas accès à l’administration du planning.',
     'admin.tabGeneral': 'Général',
     'admin.tabPreview': 'Aperçu rappels',
@@ -82,7 +82,7 @@ export const STRINGS = {
     'admin.networkError': 'Réseau ou serveur indisponible.',
     'admin.discordTitle': 'Discord',
     'admin.discordTestHelp':
-      'Envoie un court embed de test (anglais), avec le même nom / logo que les rappels (FireLegends + PUBLIC_APP_URL), et une mention @everyone. Le bot doit avoir la permission « Mentionner @everyone » sur ce salon.',
+      'Envoie un court message de test dans le salon (même présentation que les rappels), avec une mention @everyone. Le bot doit pouvoir mentionner @everyone sur ce salon.',
     'admin.discordTestBtn': 'Tester l’envoi Discord (@everyone)',
     'admin.discordTestSending': 'Envoi en cours…',
     'admin.discordTestOk': 'Message de test envoyé dans le salon Discord (avec @everyone).',
@@ -93,13 +93,10 @@ export const STRINGS = {
     'admin.previewSampleOption': 'Exemple fictif (aperçu)',
     'admin.previewLoadingList': 'Chargement de la liste…',
     'admin.previewLoading': 'Chargement de l’aperçu…',
-    'admin.previewRoute404': 'Route introuvable : redémarrez le serveur avec la dernière version du code.',
+    'admin.previewRoute404': 'Aperçu indisponible. Réessayez dans un instant ou contactez l’administrateur si le problème continue.',
     'admin.previewHttp': 'Aperçu indisponible (HTTP {status}).',
     'admin.previewNetwork': 'Réseau ou serveur indisponible pour l’aperçu.',
-    'admin.previewMessageFoot':
-      'Rappel en anglais : auteur = nom de guilde (ex. FireLegends) + logo si PUBLIC_APP_URL ou URL en base. Délais : {offsets} min (REMINDER_MINUTES). Boutons RSVP comme sur Discord.',
-    'admin.previewEmpty':
-      'Aucun texte d’aperçu. Redémarrez le processus Node après déploiement du code, ou rechargez la page (Ctrl+F5) pour charger le dernier bundle.',
+    'admin.previewEmpty': 'Aucun contenu à afficher pour cet aperçu.',
   },
   en: {
     'planner.prevWeek': 'Previous week',
@@ -118,9 +115,9 @@ export const STRINGS = {
     'planner.editPast': 'This event has already started and can no longer be edited.',
     'planner.reminderBodyLabel': 'Discord reminder text (optional)',
     'planner.reminderBodyPlaceholder':
-      'Example:\nReminder — starts in {minutes} {minute_word}\n\n{title}',
+      'Example: a short reminder message, on one or more lines.',
     'planner.reminderBodyHelp':
-      'Leave empty for the default English body. Otherwise embed body template (max 4096 characters). Placeholders: {title} or {event}, {offset} or {minutes}, {minute_word}. Line breaks: normal newline or \\n. If you write in French, the server can translate to English when posting to Discord (set DEEPL_AUTH_KEY on the server — see .env.example).',
+      'Leave empty to keep the automatic reminder on Discord (English). If you write here, that text will be used for this event. You can use several lines. French can be translated to English when sent if your setup supports it.',
     'planner.errorGuildForbidden': 'Planner guild not allowed',
     'planner.errorSession': 'Session expired or not signed in',
     'planner.errorLoadEvents': 'Could not load events',
@@ -147,7 +144,7 @@ export const STRINGS = {
     'admin.backPlanner': 'Back to planner',
     'admin.loading': 'Loading…',
     'admin.intro':
-      'Add Discord user IDs (snowflakes) for members allowed to create and delete events. If the list is empty, any signed-in planner user can do it. Server-configured administrators always can. Discord reminder wording is configured per event in the planner (new event or click an upcoming block).',
+      'Add Discord user IDs for members allowed to create and delete events. If the list is empty, any signed-in planner user can do it. Administrators always can. Discord reminder wording is configured per event in the planner (new event or click an upcoming block).',
     'admin.forbidden': 'You do not have access to planner administration.',
     'admin.tabGeneral': 'General',
     'admin.tabPreview': 'Reminder preview',
@@ -180,12 +177,9 @@ export const STRINGS = {
     'admin.previewSampleOption': 'Sample (preview)',
     'admin.previewLoadingList': 'Loading list…',
     'admin.previewLoading': 'Loading preview…',
-    'admin.previewRoute404': 'Route not found: restart the server with the latest code.',
+    'admin.previewRoute404': 'Preview unavailable. Try again in a moment or contact your administrator if it persists.',
     'admin.previewHttp': 'Preview unavailable (HTTP {status}).',
     'admin.previewNetwork': 'Network or server unavailable for preview.',
-    'admin.previewMessageFoot':
-      'English reminder embed: author = guild display name + logo when PUBLIC_APP_URL (or DB URL) is set. Offsets: {offsets} min (REMINDER_MINUTES). RSVP buttons match Discord.',
-    'admin.previewEmpty':
-      'No preview text. Restart the Node process after deploying, or hard-refresh (Ctrl+F5) to load the latest bundle.',
+    'admin.previewEmpty': 'Nothing to show for this preview.',
   },
 };
