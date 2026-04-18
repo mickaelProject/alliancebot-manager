@@ -205,6 +205,9 @@ function mountDiscordOAuth(app) {
       req.session.guildIds = guildIds;
       req.session.authenticated = true;
       log.info('auth_login_ok', { userId, guildCount: guildIds.length });
+      await new Promise((resolve, reject) => {
+        req.session.save((err) => (err ? reject(err) : resolve()));
+      });
       return res.redirect('/');
     } catch (err) {
       log.error('auth_callback_error', { message: err.message });

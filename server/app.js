@@ -43,7 +43,10 @@ function requestLogger(req, res, next) {
 function createApp() {
   const app = express();
   app.disable('x-powered-by');
-  if (config.nodeEnv === 'production') {
+  /** Render (et autres reverse proxies TLS) : sinon req.secure reste false et les cookies de session posent problème. */
+  const behindTlsProxy =
+    config.nodeEnv === 'production' || String(process.env.RENDER || '').toLowerCase() === 'true';
+  if (behindTlsProxy) {
     app.set('trust proxy', 1);
   }
 
@@ -61,10 +64,12 @@ function createApp() {
       resave: false,
       saveUninitialized: false,
       name: 'absid',
+      /** Lire X-Forwarded-Proto pour les cookies Secure derrière le load balancer (Render, etc.). */
+      proxy: behindTlsProxy,
       cookie: {
         httpOnly: true,
         sameSite: 'lax',
-        secure: config.nodeEnv === 'production',
+        secure: behindTlsProxy,
         maxAge: 24 * 60 * 60 * 1000,
       },
     })
@@ -132,10 +137,15 @@ function startWebServer() {
   httpServer = server;
 
   return new Promise((resolve, reject) => {
-    server.listen(config.port, () => {
+    const onListen = () => {
       log.info('http_listen', { port: config.port, sockets: true });
       resolve({ server, io });
-    });
+    };
+    if (process.env.RENDER) {
+      server.listen(config.port, '0.0.0.0', onListen);
+    } else {
+      server.listen(config.port, onListen);
+    }
     server.on('error', (err) => {
       log.error('http_error', { message: err.message });
       reject(err);
