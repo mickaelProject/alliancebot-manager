@@ -426,6 +426,8 @@ export function WeeklyPlanner() {
   const [modal, setModal] = useState(null);
   const [title, setTitle] = useState('');
   const [reminderBodyTemplate, setReminderBodyTemplate] = useState('');
+  const [defaultReminderOffsetMinutes, setDefaultReminderOffsetMinutes] = useState(5);
+  const [reminderOffsetMinutes, setReminderOffsetMinutes] = useState(5);
   const [modalTab, setModalTab] = useState('general');
   const [durationMinutes, setDurationMinutes] = useState(60);
   const [clock, setClock] = useState(() => Date.now());
@@ -478,6 +480,10 @@ export function WeeklyPlanner() {
     setGuild(data.guild || null);
     setSessionUser(data.user || null);
     setPlannerAdmin(Boolean(data.plannerAdmin));
+    const def = Number(data.defaultReminderOffsetMinutes);
+    const safeDef =
+      Number.isFinite(def) && def >= 1 ? Math.min(10080, Math.floor(def)) : 5;
+    setDefaultReminderOffsetMinutes(safeDef);
   }, [t]);
 
   const loadEvents = useCallback(async () => {
@@ -537,12 +543,13 @@ export function WeeklyPlanner() {
       setError('');
       setTitle('');
       setReminderBodyTemplate('');
+      setReminderOffsetMinutes(defaultReminderOffsetMinutes);
       setDurationMinutes(dm);
       setPreviewDuration(dm);
       setModalTab('general');
       setModal({ start });
     },
-    [t]
+    [t, defaultReminderOffsetMinutes]
   );
 
   const openEditEvent = useCallback(
@@ -559,10 +566,14 @@ export function WeeklyPlanner() {
       setReminderBodyTemplate(
         typeof ev.reminder_body_template === 'string' ? ev.reminder_body_template : ''
       );
+      const ro = Number(ev.reminder_offset_minutes);
+      setReminderOffsetMinutes(
+        Number.isFinite(ro) && ro >= 1 ? Math.min(10080, Math.floor(ro)) : defaultReminderOffsetMinutes
+      );
       setModalTab('general');
       setModal({ start: dt, editEventId: ev.id });
     },
-    [t]
+    [t, defaultReminderOffsetMinutes]
   );
 
   const closeModal = () => {
@@ -592,6 +603,7 @@ export function WeeklyPlanner() {
           datetime: modal.start.toISOString(),
           duration_minutes: durationMinutes,
           reminder_body_template: reminderBodyTemplate,
+          reminder_offset_minutes: reminderOffsetMinutes,
         }),
       });
       if (!res.ok) {
@@ -606,6 +618,7 @@ export function WeeklyPlanner() {
         duration_minutes: durationMinutes,
         guild_id: guild.id,
         reminder_body_template: reminderBodyTemplate,
+        reminder_offset_minutes: reminderOffsetMinutes,
       };
       const res = await fetch('/api/events', {
         method: 'POST',
@@ -853,6 +866,31 @@ export function WeeklyPlanner() {
             ) : (
               <div className="mt-4">
                 <label className="block text-xs font-semibold uppercase tracking-wide text-[#9a9a9a]">
+                  {t('planner.reminderOffsetLabel')}
+                  <input
+                    type="number"
+                    min={1}
+                    max={10080}
+                    step={1}
+                    className="mt-2 w-full border border-[#555] bg-[#1a1a1a] px-3 py-2.5 text-sm text-white outline-none focus:border-[#5b5fc7]"
+                    value={reminderOffsetMinutes}
+                    onChange={(e) => {
+                      let v = parseInt(e.target.value, 10);
+                      if (!Number.isFinite(v)) v = 1;
+                      v = Math.max(1, Math.min(10080, v));
+                      setReminderOffsetMinutes(v);
+                    }}
+                    aria-describedby="reminder-offset-help"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') closeModal();
+                    }}
+                  />
+                </label>
+                <p id="reminder-offset-help" className="mt-1.5 text-[11px] leading-relaxed text-[#6a6a6a]">
+                  {t('planner.reminderOffsetHelp')}
+                </p>
+                <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[#9a9a9a]">
                   {t('planner.reminderBodyLabel')}
                   <textarea
                     className="mt-2 min-h-[180px] w-full resize-y border border-[#555] bg-[#1a1a1a] px-3 py-2.5 text-sm text-white outline-none focus:border-[#5b5fc7]"
@@ -862,7 +900,6 @@ export function WeeklyPlanner() {
                     maxLength={4096}
                     spellCheck={false}
                     aria-describedby="reminder-body-help"
-                    autoFocus
                     onKeyDown={(e) => {
                       if (e.key === 'Escape') closeModal();
                     }}

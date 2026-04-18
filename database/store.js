@@ -165,6 +165,26 @@ function migrate() {
     }
     setUserVersion(10);
   }
+  if (getUserVersion() < 11) {
+    const mins = config.reminderMinutes.filter((n) => Number.isFinite(n) && n > 0);
+    const def = mins.length ? Math.min(...mins) : 5;
+    const clamped = Math.max(1, Math.min(10080, Math.floor(def)));
+    log.info('migration_apply', { to: 11, note: 'events.reminder_offset_minutes', defaultOffset: clamped });
+    try {
+      ensureDb().run(
+        `ALTER TABLE events ADD COLUMN reminder_offset_minutes INTEGER NOT NULL DEFAULT ${clamped};`
+      );
+    } catch (e) {
+      log.warn('migration_skip', { column: 'reminder_offset_minutes', reason: String(e.message) });
+    }
+    setUserVersion(11);
+  }
+}
+
+function sanitizeReminderOffsetMinutes(raw) {
+  const n = Math.floor(Number(raw));
+  if (!Number.isFinite(n) || n < 1) return 5;
+  return Math.min(10080, n);
 }
 
 function parseReminderMessages(raw) {
@@ -195,6 +215,7 @@ function rowToEvent(row) {
     guild_id: String(row.guild_id ?? ''),
     image_url: String(row.image_url ?? '').trim(),
     reminder_body_template: String(row.reminder_body_template ?? '').slice(0, 4096),
+    reminder_offset_minutes: sanitizeReminderOffsetMinutes(row.reminder_offset_minutes),
     notified: Number(row.notified) === 1,
     reminders_sent: remindersSent,
     reminder_messages: parseReminderMessages(row.reminder_messages),
@@ -245,7 +266,7 @@ async function closeDatabase() {
 async function getAllEvents() {
   const database = ensureDb();
   const res = database.exec(
-    `SELECT id, title, datetime, duration_minutes, channel_id, guild_id, image_url, reminder_body_template, notified, reminders_sent, reminder_messages
+    `SELECT id, title, datetime, duration_minutes, channel_id, guild_id, image_url, reminder_body_template, reminder_offset_minutes, notified, reminders_sent, reminder_messages
      FROM events ORDER BY datetime ASC`
   );
   if (!res.length) return [];
@@ -314,10 +335,15 @@ async function addEvent(payload) {
   }
   const imageUrl = String(payload.imageUrl ?? '').trim();
   const reminderBodyTemplate = String(payload.reminderBodyTemplate ?? '').slice(0, 4096);
+  const reminderOffsetMinutes = sanitizeReminderOffsetMinutes(
+    payload.reminderOffsetMinutes !== undefined && payload.reminderOffsetMinutes !== null
+      ? payload.reminderOffsetMinutes
+      : 5
+  );
   database.run(
-    `INSERT INTO events (title, datetime, duration_minutes, channel_id, guild_id, image_url, reminder_body_template, notified, reminders_sent, reminder_messages)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 0, '[]', '{}')`,
-    [title, datetimeMs, durationMinutes, channelId, guildId, imageUrl, reminderBodyTemplate]
+    `INSERT INTO events (title, datetime, duration_minutes, channel_id, guild_id, image_url, reminder_body_template, reminder_offset_minutes, notified, reminders_sent, reminder_messages)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, '[]', '{}')`,
+    [title, datetimeMs, durationMinutes, channelId, guildId, imageUrl, reminderBodyTemplate, reminderOffsetMinutes]
   );
   persist();
   const st = database.prepare('SELECT id FROM events ORDER BY id DESC LIMIT 1');
@@ -344,7 +370,7 @@ async function deleteEvent(id) {
 /**
  * @param {number} id
  * @param {string} guildId
- * @param {{ title?: string, datetimeMs?: number, durationMinutes?: number, reminderBodyTemplate?: string, imageUrl?: string }} patch
+ * @param {{ title?: string, datetimeMs?: number, durationMinutes?: number, reminderBodyTemplate?: string, imageUrl?: string, reminderOffsetMinutes?: number }} patch
  */
 async function updateEvent(id, guildId, patch) {
   const ev = await getEventById(id);
@@ -364,10 +390,23 @@ async function updateEvent(id, guildId, patch) {
       : ev.reminder_body_template;
   const imageUrl =
     patch.imageUrl !== undefined ? String(patch.imageUrl ?? '').trim() : ev.image_url;
+  const reminderOffsetMinutes =
+    patch.reminderOffsetMinutes !== undefined
+      ? sanitizeReminderOffsetMinutes(patch.reminderOffsetMinutes)
+      : ev.reminder_offset_minutes;
 
   ensureDb().run(
-    `UPDATE events SET title = ?, datetime = ?, duration_minutes = ?, image_url = ?, reminder_body_template = ? WHERE id = ? AND guild_id = ?`,
-    [title, datetimeMs, durationMinutes, imageUrl, reminderBodyTemplate, id, String(guildId).trim()]
+    `UPDATE events SET title = ?, datetime = ?, duration_minutes = ?, image_url = ?, reminder_body_template = ?, reminder_offset_minutes = ? WHERE id = ? AND guild_id = ?`,
+    [
+      title,
+      datetimeMs,
+      durationMinutes,
+      imageUrl,
+      reminderBodyTemplate,
+      reminderOffsetMinutes,
+      id,
+      String(guildId).trim(),
+    ]
   );
   persist();
   appEvents.emit('event.updated', { guildId: String(guildId).trim(), eventId: id });
@@ -378,7 +417,7 @@ async function updateEvent(id, guildId, patch) {
 async function getEventById(id) {
   const database = ensureDb();
   const stmt = database.prepare(
-    `SELECT id, title, datetime, duration_minutes, channel_id, guild_id, image_url, reminder_body_template, notified, reminders_sent, reminder_messages FROM events WHERE id = ?`
+    `SELECT id, title, datetime, duration_minutes, channel_id, guild_id, image_url, reminder_body_template, reminder_offset_minutes, notified, reminders_sent, reminder_messages FROM events WHERE id = ?`
   );
   stmt.bind([id]);
   let ev = null;
@@ -395,13 +434,17 @@ async function markReminderSent(id, offsetMinutes) {
   const set = new Set(ev.reminders_sent);
   set.add(offsetMinutes);
   const json = JSON.stringify([...set].sort((a, b) => a - b));
-  const allDone = config.reminderMinutes.every((m) => set.has(m));
+  const target = sanitizeReminderOffsetMinutes(ev.reminder_offset_minutes);
+  const allDone = set.has(target);
   ensureDb().run('UPDATE events SET reminders_sent = ?, notified = ? WHERE id = ?', [json, allDone ? 1 : 0, id]);
   persist();
 }
 
 async function markAsNotified(id) {
-  const json = JSON.stringify([...config.reminderMinutes].sort((a, b) => a - b));
+  const ev = await getEventById(id);
+  if (!ev) return;
+  const target = sanitizeReminderOffsetMinutes(ev.reminder_offset_minutes);
+  const json = JSON.stringify([target]);
   ensureDb().run('UPDATE events SET reminders_sent = ?, notified = 1 WHERE id = ?', [json, id]);
   persist();
 }
@@ -410,20 +453,21 @@ async function markEventNotified(id) {
   await markAsNotified(id);
 }
 
-async function getEventsDueForReminderOffset(nowMs, offsetMinutes) {
+async function getEventsDueForReminder(nowMs) {
   const database = ensureDb();
   const stmt = database.prepare(
-    `SELECT id, title, datetime, duration_minutes, channel_id, guild_id, image_url, reminder_body_template, notified, reminders_sent, reminder_messages
+    `SELECT id, title, datetime, duration_minutes, channel_id, guild_id, image_url, reminder_body_template, reminder_offset_minutes, notified, reminders_sent, reminder_messages
      FROM events WHERE datetime > ?`
   );
   stmt.bind([nowMs]);
   const out = [];
   while (stmt.step()) {
     const ev = rowToEvent(stmt.getAsObject());
+    const target = ev.reminder_offset_minutes;
     const diff = ev.datetime - nowMs;
     const minutesUntil = Math.ceil(diff / 60000);
-    if (minutesUntil !== offsetMinutes) continue;
-    if (ev.reminders_sent.includes(offsetMinutes)) continue;
+    if (minutesUntil !== target) continue;
+    if (ev.reminders_sent.includes(target)) continue;
     out.push(ev);
   }
   stmt.free();
@@ -598,7 +642,7 @@ module.exports = {
   markReminderSent,
   markAsNotified,
   markEventNotified,
-  getEventsDueForReminderOffset,
+  getEventsDueForReminder,
   setReminderMessageRef,
   getReminderMessageRef,
   upsertRsvp,

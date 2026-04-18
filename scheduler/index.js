@@ -5,7 +5,7 @@
 
 const cron = require('node-cron');
 const { config } = require('../config');
-const { getEventsDueForReminderOffset, markReminderSent, setReminderMessageRef, getGuildSettings } = require('../database');
+const { getEventsDueForReminder, markReminderSent, setReminderMessageRef, getGuildSettings } = require('../database');
 const { buildReminderEmbed } = require('../lib/eventEmbeds');
 const { formatReminderBodyFromTemplate } = require('../lib/reminderBodyTemplate');
 const { finalizeDiscordReminderBody } = require('../lib/reminderBodyDiscordTranslate');
@@ -83,21 +83,19 @@ async function runReminderTick(client) {
     return;
   }
   const now = Date.now();
-  for (const offset of config.reminderMinutes) {
-    let due;
-    try {
-      due = await getEventsDueForReminderOffset(now, offset);
-    } catch (err) {
-      log.error('tick_db_error', { message: err.message });
-      continue;
-    }
-    if (!due.length) {
-      log.debug('tick_no_matches', { offsetMinutes: offset });
-      continue;
-    }
-    for (const ev of due) {
-      await sendReminder(client, ev, offset);
-    }
+  let due;
+  try {
+    due = await getEventsDueForReminder(now);
+  } catch (err) {
+    log.error('tick_db_error', { message: err.message });
+    return;
+  }
+  if (!due.length) {
+    log.debug('tick_no_matches', {});
+    return;
+  }
+  for (const ev of due) {
+    await sendReminder(client, ev, ev.reminder_offset_minutes);
   }
 }
 
@@ -120,7 +118,7 @@ function startScheduler(client) {
   );
   log.info('cron_started', {
     pattern: '* * * * *',
-    offsets: config.reminderMinutes,
+    mode: 'one_reminder_per_event',
     timezone: config.schedulerTimeZone,
   });
 

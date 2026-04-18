@@ -29,6 +29,9 @@ export const STRINGS = {
     'planner.createFailed': 'Création impossible',
     'planner.updateFailed': 'Enregistrement impossible',
     'planner.editPast': 'Cet événement est déjà passé et ne peut plus être modifié.',
+    'planner.reminderOffsetLabel': 'Rappel (minutes avant le début)',
+    'planner.reminderOffsetHelp':
+      'Un seul message de rappel est envoyé sur Discord à ce moment-là (grille en UTC, comme l’heure de début).',
     'planner.reminderBodyLabel': 'Texte du rappel Discord (optionnel)',
     'planner.reminderBodyPlaceholder':
       'Exemple : un court message pour annoncer le rappel, sur une ou plusieurs lignes.',
@@ -113,6 +116,9 @@ export const STRINGS = {
     'planner.createFailed': 'Could not create event',
     'planner.updateFailed': 'Could not save changes',
     'planner.editPast': 'This event has already started and can no longer be edited.',
+    'planner.reminderOffsetLabel': 'Reminder (minutes before start)',
+    'planner.reminderOffsetHelp':
+      'Only one Discord reminder is sent at this time (UTC grid, same as the start time).',
     'planner.reminderBodyLabel': 'Discord reminder text (optional)',
     'planner.reminderBodyPlaceholder':
       'Example: a short reminder message, on one or more lines.',

@@ -32,7 +32,7 @@ function parseReminderMinutes(raw, fallback) {
   return parts.length ? [...new Set(parts)].sort((a, b) => b - a) : [...fallback];
 }
 
-/** Délais par défaut (minutes avant le début) — un seul rappel à T−5 min. */
+/** Valeur par défaut de REMINDER_MINUTES si absent (minutes avant le début). */
 const defaultReminders = [5];
 
 const config = {
@@ -51,7 +51,10 @@ const config = {
   dashboardAllowedRoleIds: parseIdList(process.env.DASHBOARD_ALLOWED_ROLE_IDS),
   /** Slash commands: members with Administrator OR one of these role IDs can create/delete events */
   botManageRoleIds: parseIdList(process.env.BOT_MANAGE_ROLE_IDS),
-  /** Minutes before event start to send reminders (sorted descending internally by scheduler) */
+  /**
+   * Liste d’entiers (ex. « 10,5 ») : sert de **défaut** pour le délai de rappel des nouveaux événements
+   * (on prend le minimum). Le scheduler envoie **un seul** rappel par événement, au délai stocké en base.
+   */
   reminderMinutes: parseReminderMinutes(process.env.REMINDER_MINUTES, defaultReminders),
   /** SQLite file path (relative to project root) */
   databasePath: process.env.DATABASE_PATH || 'events.db',
@@ -78,6 +81,15 @@ const config = {
    */
   deeplAuthKey: String(process.env.DEEPL_AUTH_KEY || '').trim(),
 };
+
+/**
+ * Délai par défaut pour les **nouveaux** événements (planning / API) quand aucun délai n’est précisé.
+ * Dérivé du plus petit entier positif dans REMINDER_MINUTES, sinon 5.
+ */
+function defaultReminderOffsetMinutes() {
+  const arr = config.reminderMinutes.filter((n) => Number.isFinite(n) && n > 0);
+  return arr.length ? Math.min(...arr) : 5;
+}
 
 /**
  * Throws with a clear message if required production variables are missing.
@@ -110,4 +122,4 @@ function validateConfig() {
   }
 }
 
-module.exports = { config, validateConfig, parseIdList };
+module.exports = { config, validateConfig, parseIdList, defaultReminderOffsetMinutes };

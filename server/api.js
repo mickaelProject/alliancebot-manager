@@ -25,7 +25,7 @@ const { formatReminderBodyFromTemplate } = require('../lib/reminderBodyTemplate'
 const { finalizeDiscordReminderBody } = require('../lib/reminderBodyDiscordTranslate');
 const { resolveReminderBranding } = require('../lib/reminderBranding');
 const { resolvePlannerEditorProfiles } = require('../lib/plannerEditorProfiles');
-const { config } = require('../config');
+const { config, defaultReminderOffsetMinutes } = require('../config');
 const { ensureCsrfToken } = require('./sessionToken');
 
 const log = createLogger('api');
@@ -193,6 +193,7 @@ router.get('/bootstrap', async (req, res) => {
       guildIds,
       plannerAdmin,
       user,
+      defaultReminderOffsetMinutes: defaultReminderOffsetMinutes(),
     });
   } catch (err) {
     log.error('bootstrap_failed', { message: err.message });
@@ -226,9 +227,7 @@ router.get('/admin/event-reminder-preview', async (req, res) => {
   if (!(await requirePlannerAdminSession(req, res))) return;
   try {
     const settings = await getGuildSettings(req.guildId);
-    /** Aperçu : délai le plus proche du début (min), cohérent avec le texte « starts in N minutes ». */
-    const offsetMinutes =
-      config.reminderMinutes.length > 0 ? Math.min(...config.reminderMinutes) : 5;
+    let offsetMinutes = defaultReminderOffsetMinutes();
 
     let title = 'Sample: TRI-ALLIANCE CLASH — LEGION 1';
     let bodyTemplate = '';
@@ -243,6 +242,7 @@ router.get('/admin/event-reminder-preview', async (req, res) => {
         return res.status(404).json({ error: 'Événement introuvable.' });
       }
       title = ev.title;
+      offsetMinutes = Number(ev.reminder_offset_minutes) || defaultReminderOffsetMinutes();
       const evTpl = String(ev.reminder_body_template ?? '').trim();
       bodyTemplate = evTpl || String(settings.reminder_body_template ?? '').trim();
     }
@@ -263,6 +263,7 @@ router.get('/admin/event-reminder-preview', async (req, res) => {
     const reminderText = description;
     return res.json({
       offsetMinutes,
+      defaultReminderOffsetMinutes: defaultReminderOffsetMinutes(),
       reminderMinutes: config.reminderMinutes,
       reminderText,
       /** @deprecated use reminderText — kept for older web bundles */
@@ -381,6 +382,7 @@ router.post(
   body('datetime').isString().notEmpty(),
   body('duration_minutes').optional().isInt({ min: 1, max: 1440 }),
   body('reminder_body_template').optional().isString().isLength({ max: 4096 }),
+  body('reminder_offset_minutes').optional().isInt({ min: 1, max: 10080 }),
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
@@ -420,6 +422,10 @@ router.post(
         req.body.duration_minutes != null ? Number(req.body.duration_minutes) : 60;
       const reminderBodyTemplate =
         req.body.reminder_body_template != null ? String(req.body.reminder_body_template) : '';
+      const reminderOffsetMinutes =
+        req.body.reminder_offset_minutes != null && req.body.reminder_offset_minutes !== ''
+          ? Number(req.body.reminder_offset_minutes)
+          : defaultReminderOffsetMinutes();
       const id = await addEvent({
         title: req.body.title,
         datetimeMs: t,
@@ -428,6 +434,7 @@ router.post(
         durationMinutes,
         imageUrl: '',
         reminderBodyTemplate,
+        reminderOffsetMinutes,
       });
       log.info('api_event_created', { id, guildId: req.guildId, mode: req.authMode });
       return res.status(201).json({ id });
@@ -445,6 +452,7 @@ router.patch(
   body('datetime').optional().isString().notEmpty(),
   body('duration_minutes').optional().isInt({ min: 1, max: 1440 }),
   body('reminder_body_template').optional().isString().isLength({ max: 4096 }),
+  body('reminder_offset_minutes').optional().isInt({ min: 1, max: 10080 }),
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
@@ -458,7 +466,7 @@ router.patch(
       const ev = await getEventById(req.params.id);
       if (!ev || ev.guild_id !== req.guildId) return res.status(404).json({ error: 'Not found' });
 
-      /** @type {{ title?: string, datetimeMs?: number, durationMinutes?: number, reminderBodyTemplate?: string }} */
+      /** @type {{ title?: string, datetimeMs?: number, durationMinutes?: number, reminderBodyTemplate?: string, reminderOffsetMinutes?: number }} */
       const patch = {};
       if (req.body.title !== undefined) patch.title = String(req.body.title).trim();
       if (req.body.datetime !== undefined) {
@@ -472,6 +480,9 @@ router.patch(
       if (req.body.duration_minutes != null) patch.durationMinutes = Number(req.body.duration_minutes);
       if (req.body.reminder_body_template !== undefined) {
         patch.reminderBodyTemplate = String(req.body.reminder_body_template);
+      }
+      if (req.body.reminder_offset_minutes != null && req.body.reminder_offset_minutes !== '') {
+        patch.reminderOffsetMinutes = Number(req.body.reminder_offset_minutes);
       }
       if (!Object.keys(patch).length) {
         return res.status(400).json({ error: 'Aucun champ à mettre à jour.' });

@@ -4,6 +4,7 @@
 
 const { EmbedBuilder } = require('discord.js');
 const { addEvent, deleteEvent, getEventsByGuild, getEventById } = require('../database');
+const { defaultReminderOffsetMinutes } = require('../config');
 const { canManageEvents } = require('./permissions');
 const { createLogger } = require('../lib/logger');
 const { handleRsvpButton } = require('./rsvpButtons');
@@ -88,6 +89,7 @@ async function handleInteraction(interaction) {
       datetimeMs: parsed,
       channelId: channel.id,
       guildId: interaction.guildId,
+      reminderOffsetMinutes: defaultReminderOffsetMinutes(),
     });
     log.info('event_created_slash', { id, guildId: interaction.guildId });
     await interaction.reply({
