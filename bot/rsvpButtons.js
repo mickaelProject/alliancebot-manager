@@ -3,7 +3,7 @@
  */
 
 const { getEventById, upsertRsvp, getGuildSettings } = require('../database');
-const { buildReminderEmbed, buildRsvpRow } = require('../lib/eventEmbeds');
+const { buildReminderEmbed } = require('../lib/eventEmbeds');
 const { formatReminderBodyFromTemplate } = require('../lib/reminderBodyTemplate');
 const { finalizeDiscordReminderBody } = require('../lib/reminderBodyDiscordTranslate');
 const { resolveReminderBranding } = require('../lib/reminderBranding');
@@ -63,11 +63,15 @@ async function handleRsvpButton(interaction) {
     offsetMinutes,
     description,
   });
-  const row = buildRsvpRow(eventId, offsetMinutes);
-
   try {
     if (interaction.message && 'edit' in interaction.message) {
-      await interaction.message.edit({ content: null, embeds: [embed], components: [row] });
+      const payload = { embeds: [embed], components: [] };
+      const prevContent = interaction.message.content?.trim();
+      if (prevContent) {
+        payload.content = interaction.message.content;
+        payload.allowedMentions = { parse: ['everyone'] };
+      }
+      await interaction.message.edit(payload);
     }
   } catch (err) {
     log.warn('rsvp_message_edit_failed', { message: err.message, eventId });

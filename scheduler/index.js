@@ -1,12 +1,12 @@
 /**
  * Cron-based reminder scheduler (every minute).
- * Sends English reminder embed (guild name + logo on author) + RSVP buttons.
+ * Sends reminder embed (guild name + logo on author) + @everyone (no RSVP row).
  */
 
 const cron = require('node-cron');
 const { config } = require('../config');
 const { getEventsDueForReminderOffset, markReminderSent, setReminderMessageRef, getGuildSettings } = require('../database');
-const { buildReminderEmbed, buildRsvpRow } = require('../lib/eventEmbeds');
+const { buildReminderEmbed } = require('../lib/eventEmbeds');
 const { formatReminderBodyFromTemplate } = require('../lib/reminderBodyTemplate');
 const { finalizeDiscordReminderBody } = require('../lib/reminderBodyDiscordTranslate');
 const { resolveReminderBranding } = require('../lib/reminderBranding');
@@ -62,8 +62,12 @@ async function sendReminder(client, event, offsetMinutes) {
       offsetMinutes,
       description,
     });
-    const row = buildRsvpRow(event.id, offsetMinutes);
-    const msg = await channel.send({ files, embeds: [embed], components: [row] });
+    const msg = await channel.send({
+      content: '@everyone',
+      allowedMentions: { parse: ['everyone'] },
+      files,
+      embeds: [embed],
+    });
     await setReminderMessageRef(event.id, offsetMinutes, msg.channel.id, msg.id);
     await markReminderSent(event.id, offsetMinutes);
     appEvents.emit('reminder.sent', { guildId: event.guild_id, eventId: event.id, offsetMinutes });

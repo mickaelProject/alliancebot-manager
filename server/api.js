@@ -270,7 +270,7 @@ router.get('/admin/event-reminder-preview', async (req, res) => {
       /** @deprecated use reminderText — kept for older web bundles */
       content: reminderText,
       embed: embed.toJSON(),
-      buttonLabels: ['Join', 'Decline', 'Maybe'],
+      buttonLabels: [],
     });
   } catch (err) {
     log.error('admin_reminder_preview_failed', { message: err.message, stack: err?.stack });
