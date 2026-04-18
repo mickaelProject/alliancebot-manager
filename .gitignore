@@ -1,0 +1,6 @@
+node_modules/
+.env
+infos importantes.txt
+*.db
+*.db-journal
+.DS_Store
