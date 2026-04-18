@@ -38,11 +38,13 @@ const defaultReminders = [5];
 const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   port: parseInt(process.env.PORT || '3000', 10) || 3000,
-  discordToken: process.env.DISCORD_TOKEN || '',
-  discordClientId: process.env.DISCORD_CLIENT_ID || '',
-  discordClientSecret: process.env.DISCORD_CLIENT_SECRET || '',
+  discordToken: String(process.env.DISCORD_TOKEN || '').trim(),
+  discordClientId: String(process.env.DISCORD_CLIENT_ID || '').trim(),
+  discordClientSecret: String(process.env.DISCORD_CLIENT_SECRET || '').trim(),
   /** Public callback URL registered in Discord Developer Portal */
-  oauthCallbackUrl: process.env.OAUTH_CALLBACK_URL || 'http://localhost:3000/auth/discord/callback',
+  oauthCallbackUrl: String(
+    process.env.OAUTH_CALLBACK_URL || 'http://localhost:3000/auth/discord/callback'
+  ).trim(),
   sessionSecret: process.env.SESSION_SECRET || '',
   /** Dashboard access: Discord user IDs allowed after OAuth */
   dashboardAllowedUserIds: parseIdList(process.env.DASHBOARD_ALLOWED_USER_IDS),

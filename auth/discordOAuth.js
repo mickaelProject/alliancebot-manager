@@ -41,7 +41,7 @@ function getAuthorizeUrl(req) {
  * @param {string} code
  */
 async function exchangeCode(code) {
-  const body = new URLSearchParams({
+  const params = new URLSearchParams({
     client_id: config.discordClientId,
     client_secret: config.discordClientSecret,
     grant_type: 'authorization_code',
@@ -51,11 +51,18 @@ async function exchangeCode(code) {
   const res = await fetch(`${DISCORD_API}/oauth2/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body,
+    body: params.toString(),
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`Token exchange failed: ${res.status} ${text}`);
+    log.error('oauth_token_exchange_failed', { status: res.status, body: text.slice(0, 800) });
+    let discordErr = '';
+    try {
+      discordErr = String(JSON.parse(text).error || '');
+    } catch {
+      /* ignore */
+    }
+    throw new Error(`Token exchange failed: ${res.status} ${discordErr || text.slice(0, 200)}`);
   }
   return res.json();
 }
@@ -210,8 +217,25 @@ function mountDiscordOAuth(app) {
       });
       return res.redirect('/');
     } catch (err) {
-      log.error('auth_callback_error', { message: err.message });
-      return res.status(500).send('Login failed');
+      log.error('auth_callback_error', { message: err.message, stack: err.stack?.slice(0, 600) });
+      const msg = String(err.message || '');
+      let fr =
+        '<p><strong>Connexion impossible</strong> — une erreur technique s’est produite après le retour Discord.</p>';
+      if (msg.includes('invalid_client') || msg.includes('401')) {
+        fr +=
+          '<p>Vérifiez sur Render les variables <code>DISCORD_CLIENT_ID</code> et surtout <code>DISCORD_CLIENT_SECRET</code> : ce doit être le <strong>« Client Secret » OAuth2</strong> de l’application Discord (onglet OAuth2), <strong>pas</strong> le token du bot (<code>DISCORD_TOKEN</code>).</p>';
+      } else if (msg.includes('invalid_grant')) {
+        fr +=
+          '<p>Souvent : <code>OAUTH_CALLBACK_URL</code> ne correspond pas exactement à une redirection enregistrée (même https, même chemin, sans espace en trop), ou vous avez <strong>rafraîchi</strong> la page du callback (le <code>code</code> ne fonctionne qu’une fois). Recommencez depuis <a href="/login">/login</a>.</p>';
+      } else if (msg.includes('Token exchange failed')) {
+        fr +=
+          '<p>Discord a refusé l’échange du code. Vérifiez <code>OAUTH_CALLBACK_URL</code> (identique au portail) et les identifiants OAuth2. Consultez les logs Render pour la ligne <code>oauth_token_exchange_failed</code>.</p>';
+      } else if (msg.includes('users/@me')) {
+        fr += '<p>Impossible de lire le profil Discord après l’échange du token. Vérifiez les scopes et les logs serveur.</p>';
+      }
+      fr +=
+        '<p style="margin-top:1rem"><a href="/login">Retour à la page de connexion</a></p>';
+      return res.status(500).type('html').send(`<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>Connexion</title></head><body style="font-family:system-ui;max-width:42rem;margin:2rem auto;line-height:1.5">${fr}</body></html>`);
     }
   });
 }
