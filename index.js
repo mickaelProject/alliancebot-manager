@@ -10,7 +10,8 @@ const log = createLogger('app');
 
 process.on('uncaughtException', (err) => {
   log.error('uncaught_exception', { message: err.message, stack: err.stack });
-  process.exit(1);
+  // Sur Windows, quitter brutalement peut déclencher UV_HANDLE_CLOSING.
+  setTimeout(() => process.exit(1), 50);
 });
 
 process.on('unhandledRejection', (reason) => {
@@ -72,7 +73,7 @@ async function shutdown() {
     /* ignore */
   }
   await closeDatabase();
-  process.exit(0);
+  setTimeout(() => process.exit(0), 50);
 }
 
 process.on('SIGINT', () => {
@@ -84,5 +85,12 @@ process.on('SIGTERM', () => {
 
 bootstrap().catch((err) => {
   log.error('bootstrap_failed', { message: err.message, stack: err.stack });
-  process.exit(1);
+  // Ferme proprement HTTP/DB pour éviter le crash natif Windows.
+  shutdown()
+    .catch(() => {
+      /* ignore */
+    })
+    .finally(() => {
+      setTimeout(() => process.exit(1), 50);
+    });
 });
