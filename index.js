@@ -35,7 +35,19 @@ async function bootstrap() {
 
   discordClient = createDiscordClient();
   setDiscordClient(discordClient);
-  await discordClient.login(config.discordToken);
+  try {
+    await discordClient.login(config.discordToken);
+  } catch (err) {
+    // Évite un crash natif (UV_HANDLE_CLOSING) quand le websocket Discord n’a pas démarré correctement.
+    try {
+      discordClient.destroy();
+    } catch {
+      /* ignore */
+    }
+    discordClient = null;
+    setDiscordClient(null);
+    throw err;
+  }
   if (!discordClient.isReady()) {
     await once(discordClient, 'clientReady');
   }
