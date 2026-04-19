@@ -25,7 +25,7 @@ function renderLoginPage(opts = {}) {
   const passwordBlock = showPw
     ? `<div class="mt-6 border-t border-white/10 pt-6">
       <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Connexion sans Discord</p>
-      <p class="mt-1 text-xs text-slate-500">Contournement si OAuth Discord est bloqué depuis l’hébergeur. Mot de passe défini sur le serveur (<code>DASHBOARD_PASSWORD</code>).</p>
+      <p class="mt-1 text-xs text-slate-500">Contournement si OAuth Discord est bloqué depuis l’hébergeur. Même planning et <strong>même bot</strong> (<code>DISCORD_TOKEN</code>) : le serveur complète ton profil via l’API bot si tu es membre de la guilde configurée.</p>
       ${pwdErr}
       <form method="POST" action="/auth/planner-password" class="mt-3 space-y-3">
         <input type="hidden" name="_csrf" value="${csrf}" />

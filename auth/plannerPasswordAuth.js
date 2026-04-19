@@ -8,8 +8,45 @@ const rateLimit = require('express-rate-limit');
 const { config } = require('../config');
 const { createLogger } = require('../lib/logger');
 const { ensureCsrfToken } = require('../server/sessionToken');
+const { getDiscordUserAgent } = require('./discordOAuth');
 
 const log = createLogger('auth');
+
+const DISCORD_API = 'https://discord.com/api/v10';
+
+/**
+ * Récupère pseudo / avatar Discord via le **token du bot** (même app que les rappels) — pas d’OAuth utilisateur.
+ * @param {string} guildId
+ * @param {string} userId
+ */
+async function fetchDiscordUserViaBot(guildId, userId) {
+  if (!config.discordToken || !guildId || !userId) return null;
+  try {
+    const res = await fetch(`${DISCORD_API}/guilds/${guildId}/members/${userId}`, {
+      headers: {
+        Authorization: `Bot ${config.discordToken}`,
+        Accept: 'application/json',
+        'User-Agent': getDiscordUserAgent(),
+        Connection: 'close',
+      },
+    });
+    if (!res.ok) {
+      log.warn('planner_password_member_fetch', { status: res.status, guildId, userId });
+      return null;
+    }
+    const m = await res.json();
+    const u = m.user || {};
+    return {
+      id: String(u.id || userId),
+      username: String(u.username || 'Planning'),
+      discriminator: String(u.discriminator ?? '0'),
+      avatar: u.avatar != null ? String(u.avatar) : null,
+    };
+  } catch (e) {
+    log.warn('planner_password_member_fetch_err', { message: e.message });
+    return null;
+  }
+}
 
 const postPwLimit = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -36,7 +73,7 @@ function guildIdsForPasswordLogin() {
  * @param {import('express').Application} app
  */
 function mountPlannerPasswordAuth(app) {
-  app.post('/auth/planner-password', postPwLimit, (req, res) => {
+  app.post('/auth/planner-password', postPwLimit, async (req, res) => {
     if (!config.dashboardPassword || config.dashboardPassword.length < 16) {
       return res.status(404).send('Not found');
     }
@@ -77,12 +114,25 @@ function mountPlannerPasswordAuth(app) {
       );
     }
 
-    req.session.discordUser = {
+    let discordUser = {
       id: actAs,
       username: 'Planning',
       discriminator: '0',
       avatar: null,
     };
+    const primaryGuild = guildIds[0];
+    const viaBot = await fetchDiscordUserViaBot(primaryGuild, actAs);
+    if (viaBot) {
+      discordUser = viaBot;
+      log.info('auth_planner_password_profile_enriched', { userId: actAs, guildId: primaryGuild });
+    } else {
+      log.info('auth_planner_password_profile_fallback', {
+        userId: actAs,
+        hint: 'Vérifiez que le bot est dans la guilde et a le intent membres si besoin.',
+      });
+    }
+
+    req.session.discordUser = discordUser;
     req.session.guildIds = guildIds;
     req.session.authenticated = true;
     req.session.oauthState = null;

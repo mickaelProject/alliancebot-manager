@@ -379,4 +379,4 @@ function mountDiscordOAuth(app) {
   });
 }
 
-module.exports = { mountDiscordOAuth, getAuthorizeUrl };
+module.exports = { mountDiscordOAuth, getAuthorizeUrl, getDiscordUserAgent };
