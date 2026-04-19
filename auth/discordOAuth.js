@@ -10,6 +10,9 @@ const { createLogger } = require('../lib/logger');
 const log = createLogger('auth');
 
 const DISCORD_API = 'https://discord.com/api/v10';
+/** URLs OAuth2 documentées (sans /v10/ pour authorize + token) — évite des chemins non canoniques côté Cloudflare. */
+const DISCORD_OAUTH_AUTHORIZE = 'https://discord.com/oauth2/authorize';
+const DISCORD_OAUTH_TOKEN = 'https://discord.com/api/oauth2/token';
 
 /** Voir https://discord.com/developers/docs/reference#user-agent — requis pour éviter blocages Cloudflare sur les appels serveur. */
 function getDiscordUserAgent() {
@@ -53,7 +56,7 @@ function getAuthorizeUrl(req) {
     state,
     prompt: 'consent',
   });
-  return `https://discord.com/api/oauth2/authorize?${params.toString()}`;
+  return `${DISCORD_OAUTH_AUTHORIZE}?${params.toString()}`;
 }
 
 /**
@@ -75,7 +78,7 @@ async function exchangeCode(code) {
   };
   const maxAttempts = 3;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const res = await fetch(`${DISCORD_API}/oauth2/token`, {
+    const res = await fetch(DISCORD_OAUTH_TOKEN, {
       method: 'POST',
       headers,
       body: bodyStr,
