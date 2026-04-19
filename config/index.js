@@ -48,6 +48,15 @@ const config = {
   sessionSecret: process.env.SESSION_SECRET || '',
   /** Dashboard access: Discord user IDs allowed after OAuth */
   dashboardAllowedUserIds: parseIdList(process.env.DASHBOARD_ALLOWED_USER_IDS),
+  /**
+   * Connexion de secours sans OAuth Discord (évite Cloudflare sur l’échange token depuis l’hébergeur).
+   * Mot de passe fort (≥16 caractères) + voir DASHBOARD_PASSWORD_ACT_AS_USER_ID.
+   */
+  dashboardPassword: String(process.env.DASHBOARD_PASSWORD || '').trim(),
+  /** ID Discord à utiliser en session (doit être dans DASHBOARD_ALLOWED_USER_IDS). Si vide et une seule ID autorisée, celle-ci est prise. */
+  dashboardPasswordActAsUserId: String(process.env.DASHBOARD_PASSWORD_ACT_AS_USER_ID || '').trim(),
+  /** Guildes visibles pour la session mot de passe (CSV). Si vide : DASHBOARD_GUILD_ID ou PLANNER_GUILD_ID. */
+  dashboardPasswordGuildIds: parseIdList(process.env.DASHBOARD_PASSWORD_GUILD_IDS),
   /** If set, user must be in this guild and have one of dashboardAllowedRoleIds (checked with bot token) */
   dashboardGuildId:
     process.env.DASHBOARD_GUILD_ID?.trim() || process.env.PLANNER_GUILD_ID?.trim() || '',

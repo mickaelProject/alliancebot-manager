@@ -2,7 +2,44 @@
  * Page de connexion minimale (Tailwind CDN).
  */
 
-function renderLoginPage() {
+/**
+ * @param {string} s
+ */
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/"/g, '&quot;');
+}
+
+/**
+ * @param {{ csrfToken?: string, showPasswordLogin?: boolean, passwordError?: boolean }} opts
+ */
+function renderLoginPage(opts = {}) {
+  const csrf = escapeHtml(opts.csrfToken || '');
+  const showPw = Boolean(opts.showPasswordLogin);
+  const pwdErr = opts.passwordError
+    ? '<p class="mt-2 text-sm text-rose-300">Mot de passe incorrect.</p>'
+    : '';
+
+  const passwordBlock = showPw
+    ? `<div class="mt-6 border-t border-white/10 pt-6">
+      <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Connexion sans Discord</p>
+      <p class="mt-1 text-xs text-slate-500">Contournement si OAuth Discord est bloqué depuis l’hébergeur. Mot de passe défini sur le serveur (<code>DASHBOARD_PASSWORD</code>).</p>
+      ${pwdErr}
+      <form method="POST" action="/auth/planner-password" class="mt-3 space-y-3">
+        <input type="hidden" name="_csrf" value="${csrf}" />
+        <label class="block text-xs text-slate-400">Mot de passe
+          <input type="password" name="password" required autocomplete="current-password"
+            class="mt-1 w-full rounded-lg border border-white/15 bg-black/30 px-3 py-2.5 text-sm text-white outline-none focus:border-indigo-400" />
+        </label>
+        <button type="submit" class="w-full rounded-lg bg-slate-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-500">
+          Se connecter
+        </button>
+      </form>
+    </div>`
+    : '';
+
   return `<!DOCTYPE html>
 <html lang="fr" class="h-full">
 <head>
@@ -20,6 +57,7 @@ function renderLoginPage() {
       <p class="mt-2 text-xs text-slate-500">Si la page Discord « tourne » sans fin : essayez <strong>Chrome ou Edge en navigation normale</strong> (pas de mode privé strict) — la console peut afficher <code>localStorage is not defined</code> côté Discord, ce n’est pas un réglage Render.</p>
       <a class="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-[#5865F2] px-4 py-3 text-sm font-semibold text-white hover:bg-[#4752C4]"
          href="/auth/discord">Continuer avec Discord</a>
+      ${passwordBlock}
     </div>
   </div>
 </body>

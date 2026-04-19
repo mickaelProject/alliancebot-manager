@@ -3,6 +3,11 @@
  */
 
 const { mountDiscordOAuth } = require('./discordOAuth');
+const { mountPlannerPasswordAuth } = require('./plannerPasswordAuth');
 const { isAuthenticated } = require('./middleware');
 
-module.exports = { mountDiscordOAuth, isAuthenticated };
+module.exports = {
+  mountDiscordOAuth,
+  mountPlannerPasswordAuth,
+  isAuthenticated,
+};

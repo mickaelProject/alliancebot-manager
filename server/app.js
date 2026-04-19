@@ -10,13 +10,13 @@ const session = require('express-session');
 const helmet = require('helmet');
 const { Server } = require('socket.io');
 const { config } = require('../config');
-const { mountDiscordOAuth } = require('../auth/discordOAuth');
-const { isAuthenticated } = require('../auth/middleware');
+const { mountDiscordOAuth, mountPlannerPasswordAuth, isAuthenticated } = require('../auth');
 const { createLogger } = require('../lib/logger');
 const { setIo } = require('../lib/realtime');
 const { wireRealtime } = require('./realtimeWire');
 const { apiRouter } = require('./api');
 const { renderLoginPage } = require('./loginPage');
+const { ensureCsrfToken } = require('./sessionToken');
 
 const log = createLogger('web');
 const rootDir = path.join(__dirname, '..');
@@ -88,10 +88,20 @@ function createApp() {
 
   app.get('/login', (req, res) => {
     if (isAuthenticated(req)) return res.redirect('/');
-    res.type('html').send(renderLoginPage());
+    const csrf = ensureCsrfToken(req);
+    const showPasswordLogin = Boolean(config.dashboardPassword && config.dashboardPassword.length >= 16);
+    const passwordError = req.query.pwd === '0';
+    res.type('html').send(
+      renderLoginPage({
+        csrfToken: csrf,
+        showPasswordLogin,
+        passwordError,
+      })
+    );
   });
 
   mountDiscordOAuth(app);
+  mountPlannerPasswordAuth(app);
 
   app.get('/logout', (req, res) => {
     req.session.destroy(() => res.redirect('/login'));
