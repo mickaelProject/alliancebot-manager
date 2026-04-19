@@ -58,6 +58,12 @@ function createApp() {
   );
   app.use(requestLogger);
 
+  /** Réveille l’instance Render (cold start) sans session — utile avant le flux OAuth. */
+  app.get('/health', (_req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.json({ ok: true });
+  });
+
   app.use(
     session({
       secret: config.sessionSecret,
@@ -94,6 +100,7 @@ function createApp() {
   app.use(express.static(path.join(rootDir, 'public'), { index: false }));
 
   app.use((req, res, next) => {
+    if (req.path === '/health') return next();
     if (req.path.startsWith('/auth')) return next();
     if (req.path === '/login') return next();
     if (req.path.startsWith('/socket.io')) return next();

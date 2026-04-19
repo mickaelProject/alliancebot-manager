@@ -13,6 +13,8 @@ const DISCORD_API = 'https://discord.com/api/v10';
 /** URLs OAuth2 documentées (sans /v10/ pour authorize + token) — évite des chemins non canoniques côté Cloudflare. */
 const DISCORD_OAUTH_AUTHORIZE = 'https://discord.com/oauth2/authorize';
 const DISCORD_OAUTH_TOKEN = 'https://discord.com/api/oauth2/token';
+/** Secours si Cloudflare bloque un chemin (comportement par région / IP). */
+const DISCORD_OAUTH_TOKEN_V10 = `${DISCORD_API}/oauth2/token`;
 
 /** Voir https://discord.com/developers/docs/reference#user-agent — requis pour éviter blocages Cloudflare sur les appels serveur. */
 function getDiscordUserAgent() {
@@ -62,6 +64,21 @@ function getAuthorizeUrl(req) {
 /**
  * @param {string} code
  */
+/**
+ * @param {string} tokenUrl
+ * @param {string} bodyStr
+ * @param {Record<string, string>} headers
+ */
+async function postTokenExchange(tokenUrl, bodyStr, headers) {
+  const res = await fetch(tokenUrl, {
+    method: 'POST',
+    headers,
+    body: bodyStr,
+  });
+  const text = await res.text();
+  return { res, text };
+}
+
 async function exchangeCode(code) {
   const params = new URLSearchParams({
     client_id: config.discordClientId,
@@ -71,41 +88,78 @@ async function exchangeCode(code) {
     redirect_uri: config.oauthCallbackUrl,
   });
   const bodyStr = params.toString();
-  const headers = {
+  const baseHeaders = {
     'Content-Type': 'application/x-www-form-urlencoded',
     Accept: 'application/json',
     'User-Agent': getDiscordUserAgent(),
+    Connection: 'close',
   };
-  const maxAttempts = 3;
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const res = await fetch(DISCORD_OAUTH_TOKEN, {
-      method: 'POST',
-      headers,
-      body: bodyStr,
-    });
-    if (res.status === 429 && attempt < maxAttempts) {
-      await res.text().catch(() => '');
-      const ra = res.headers.get('retry-after');
-      const parsed = parseInt(String(ra || ''), 10);
-      const waitSec = Number.isFinite(parsed) && parsed > 0 ? Math.min(60, parsed) : Math.min(30, attempt * 3);
-      log.warn('oauth_token_exchange_rate_limited', { attempt, waitSec, retryAfter: ra });
-      await sleep(waitSec * 1000);
-      continue;
-    }
-    if (!res.ok) {
-      const text = await res.text();
-      log.error('oauth_token_exchange_failed', { status: res.status, body: text.slice(0, 800) });
+  const tokenUrls = [DISCORD_OAUTH_TOKEN, DISCORD_OAUTH_TOKEN_V10];
+  const maxAttemptsPerUrl = 5;
+  let lastStatus = 0;
+  let lastSnippet = '';
+
+  for (const tokenUrl of tokenUrls) {
+    for (let attempt = 1; attempt <= maxAttemptsPerUrl; attempt++) {
+      const { res, text } = await postTokenExchange(tokenUrl, bodyStr, baseHeaders);
+      lastStatus = res.status;
+      lastSnippet = text.slice(0, 200);
+
+      if (res.ok) {
+        try {
+          return JSON.parse(text);
+        } catch (e) {
+          log.error('oauth_token_json_parse_failed', { message: e.message, tokenUrl });
+          throw new Error('Token exchange: invalid JSON response');
+        }
+      }
+
       let discordErr = '';
       try {
         discordErr = String(JSON.parse(text).error || '');
       } catch {
         /* ignore */
       }
+
+      const cloudflareBlock =
+        res.status === 429 ||
+        res.status === 403 ||
+        /cloudflare|cf-ray|Access denied/i.test(text);
+
+      if (cloudflareBlock && attempt < maxAttemptsPerUrl) {
+        const ra = res.headers.get('retry-after');
+        const parsed = parseInt(String(ra || ''), 10);
+        const fallbackWait = Math.min(45, 5 + attempt * 5);
+        const waitSec =
+          Number.isFinite(parsed) && parsed > 0 ? Math.min(90, parsed) : fallbackWait;
+        log.warn('oauth_token_exchange_rate_limited', {
+          tokenUrl,
+          attempt,
+          waitSec,
+          retryAfter: ra,
+          status: res.status,
+        });
+        await sleep(waitSec * 1000);
+        continue;
+      }
+
+      if (cloudflareBlock && tokenUrl === DISCORD_OAUTH_TOKEN) {
+        log.warn('oauth_token_try_alternate_url', { from: tokenUrl, to: DISCORD_OAUTH_TOKEN_V10 });
+        break;
+      }
+
+      log.error('oauth_token_exchange_failed', {
+        status: res.status,
+        tokenUrl,
+        body: text.slice(0, 800),
+      });
       throw new Error(`Token exchange failed: ${res.status} ${discordErr || text.slice(0, 200)}`);
     }
-    return res.json();
   }
-  throw new Error('Token exchange failed after retries');
+
+  throw new Error(
+    `Token exchange failed after retries (last ${lastStatus} ${lastSnippet.slice(0, 120)})`
+  );
 }
 
 /**
@@ -218,6 +272,8 @@ function mountDiscordOAuth(app) {
   });
 
   app.get('/auth/discord/callback', async (req, res) => {
+    const t0 = Date.now();
+    log.info('auth_callback_received', { queryKeys: Object.keys(req.query || {}) });
     try {
       const { code, state } = req.query;
       if (!code || typeof code !== 'string') {
@@ -230,6 +286,7 @@ function mountDiscordOAuth(app) {
       req.session.oauthState = null;
 
       const tokenJson = await exchangeCode(code);
+      log.info('auth_token_exchanged', { ms: Date.now() - t0 });
       const accessToken = tokenJson.access_token;
       const user = await fetchDiscordUser(accessToken);
       const userId = String(user.id);

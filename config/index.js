@@ -49,7 +49,8 @@ const config = {
   /** Dashboard access: Discord user IDs allowed after OAuth */
   dashboardAllowedUserIds: parseIdList(process.env.DASHBOARD_ALLOWED_USER_IDS),
   /** If set, user must be in this guild and have one of dashboardAllowedRoleIds (checked with bot token) */
-  dashboardGuildId: process.env.DASHBOARD_GUILD_ID?.trim() || '',
+  dashboardGuildId:
+    process.env.DASHBOARD_GUILD_ID?.trim() || process.env.PLANNER_GUILD_ID?.trim() || '',
   dashboardAllowedRoleIds: parseIdList(process.env.DASHBOARD_ALLOWED_ROLE_IDS),
   /** Slash commands: members with Administrator OR one of these role IDs can create/delete events */
   botManageRoleIds: parseIdList(process.env.BOT_MANAGE_ROLE_IDS),
@@ -114,7 +115,9 @@ function validateConfig() {
     );
   }
   if (config.dashboardAllowedRoleIds.length && !config.dashboardGuildId) {
-    errors.push('DASHBOARD_GUILD_ID is required when DASHBOARD_ALLOWED_ROLE_IDS is set');
+    errors.push(
+      'DASHBOARD_GUILD_ID (ou PLANNER_GUILD_ID) est requis quand DASHBOARD_ALLOWED_ROLE_IDS est défini'
+    );
   }
   if (errors.length) {
     const msg = `Configuration error:\n- ${errors.join('\n- ')}`;
