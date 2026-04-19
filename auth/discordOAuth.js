@@ -69,14 +69,23 @@ function getAuthorizeUrl(req) {
  * @param {string} bodyStr
  * @param {Record<string, string>} headers
  */
+const OAUTH_FETCH_TIMEOUT_MS = 25_000;
+
 async function postTokenExchange(tokenUrl, bodyStr, headers) {
-  const res = await fetch(tokenUrl, {
-    method: 'POST',
-    headers,
-    body: bodyStr,
-  });
-  const text = await res.text();
-  return { res, text };
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), OAUTH_FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(tokenUrl, {
+      method: 'POST',
+      headers,
+      body: bodyStr,
+      signal: ac.signal,
+    });
+    const text = await res.text();
+    return { res, text };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function exchangeCode(code) {
@@ -95,13 +104,27 @@ async function exchangeCode(code) {
     Connection: 'close',
   };
   const tokenUrls = [DISCORD_OAUTH_TOKEN, DISCORD_OAUTH_TOKEN_V10];
-  const maxAttemptsPerUrl = 5;
+  /** Peu de tentées + pauses courtes : évite de laisser le navigateur « tourner » plusieurs minutes sur Discord. */
+  const maxAttemptsPerUrl = 3;
   let lastStatus = 0;
   let lastSnippet = '';
 
   for (const tokenUrl of tokenUrls) {
     for (let attempt = 1; attempt <= maxAttemptsPerUrl; attempt++) {
-      const { res, text } = await postTokenExchange(tokenUrl, bodyStr, baseHeaders);
+      let res;
+      let text;
+      try {
+        const out = await postTokenExchange(tokenUrl, bodyStr, baseHeaders);
+        res = out.res;
+        text = out.text;
+      } catch (e) {
+        const name = e && typeof e === 'object' && 'name' in e ? String(e.name) : '';
+        if (name === 'AbortError') {
+          log.error('oauth_token_fetch_timeout', { tokenUrl, attempt });
+          throw new Error('Discord ne répond pas assez vite (timeout). Réessayez dans un instant.');
+        }
+        throw e;
+      }
       lastStatus = res.status;
       lastSnippet = text.slice(0, 200);
 
@@ -129,9 +152,9 @@ async function exchangeCode(code) {
       if (cloudflareBlock && attempt < maxAttemptsPerUrl) {
         const ra = res.headers.get('retry-after');
         const parsed = parseInt(String(ra || ''), 10);
-        const fallbackWait = Math.min(45, 5 + attempt * 5);
+        const fallbackWait = Math.min(12, 2 + attempt * 4);
         const waitSec =
-          Number.isFinite(parsed) && parsed > 0 ? Math.min(90, parsed) : fallbackWait;
+          Number.isFinite(parsed) && parsed > 0 ? Math.min(20, parsed) : fallbackWait;
         log.warn('oauth_token_exchange_rate_limited', {
           tokenUrl,
           attempt,
@@ -337,6 +360,9 @@ function mountDiscordOAuth(app) {
       } else if (msg.includes('invalid_grant')) {
         fr +=
           '<p>Souvent : <code>OAUTH_CALLBACK_URL</code> ne correspond pas exactement à une redirection enregistrée (même https, même chemin, sans espace en trop), ou vous avez <strong>rafraîchi</strong> la page du callback (le <code>code</code> ne fonctionne qu’une fois). Recommencez depuis <a href="/login">/login</a>.</p>';
+      } else if (msg.includes('timeout') || msg.includes('délai')) {
+        fr +=
+          '<p>Le serveur n’a pas reçu de réponse de Discord à temps. Réessayez ; vérifiez aussi que vous n’êtes pas en réseau très lent ou bloqué (VPN, pare-feu).</p>';
       } else if (msg.includes('429')) {
         fr +=
           '<p>Discord a répondu <strong>429</strong> (limitation / protection Cloudflare). Ce n’est en général <strong>pas</strong> une erreur de secret OAuth : réessayez dans quelques minutes. Le serveur envoie désormais un <code>User-Agent</code> conforme et réessaie automatiquement en cas de 429.</p>';
